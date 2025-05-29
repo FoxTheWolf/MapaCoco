@@ -112,6 +112,9 @@ map.addLayer(overlay); // Add overlay to the map
 // Handle map clicks to show a popup menu
 map.on('click', function(evt) {
   // Create a popup menu at the click location
+  // The popup menu is an HTML div element that is positioned absolutely at the click location
+  // We set its style to have a white background, padding, and a solid black border
+  // We also set its z-index to 1000 so it appears on top of the map
   const popupMenu = document.createElement('div');
   popupMenu.style.position = 'absolute';
   popupMenu.style.left = `${evt.pixel[0]}px`;
@@ -122,20 +125,29 @@ map.on('click', function(evt) {
   popupMenu.style.zIndex = 1000;
 
   // Add a close button to the popup
+  // The close button is a simple HTML button element that when clicked, removes the popup menu from the document
   const closeButton = document.createElement('button');
   closeButton.textContent = 'Close';
   closeButton.onclick = () => document.body.removeChild(popupMenu);
   popupMenu.appendChild(closeButton);
 
   // Check for features at the clicked location
+  // Get the features at the pixel location of the click event
+  // If there are any features, loop through them and check if the first feature is a point
+  // If it is, display point information in the popup
   const features = map.getFeaturesAtPixel(evt.pixel);
   if (features.length > 0) {
     const point = features[0];
     if (point.getGeometry().getType() === 'Point') {
       // Display point information if a point feature is clicked
+      // Create an HTML div element that will contain the point information
+      // Set its style to have padding and add it to the popup menu
       const pointInfo = document.createElement('div');
       pointInfo.style.padding = '10px';
 
+      // Create HTML paragraphs for the point's name, description, and timestamp
+      // Set their text content to the point's corresponding properties
+      // Add the paragraphs to the point information div
       const nameParagraph = document.createElement('p');
       nameParagraph.textContent = `Name: ${point.get('name')}`;
 
@@ -145,6 +157,9 @@ map.on('click', function(evt) {
       const timestampParagraph = document.createElement('p');
       timestampParagraph.textContent = `Timestamp: ${point.get('timestamp')}`;
 
+      // Create an HTML image element for the point's image
+      // Set its source to the point's image property
+      // Add the image to the point information div
       const imageElement = document.createElement('img');
       imageElement.src = point.get('image');
 
@@ -157,17 +172,29 @@ map.on('click', function(evt) {
   }
 
   // Create options for adding or removing points
+  // Create an HTML unordered list element that will contain the options
+  // Set its style to have no list style and padding
+  // Add the options list to the popup menu
   const optionsList = document.createElement('ul');
   optionsList.style.listStyle = 'none';
   optionsList.style.padding = 0;
 
+  // Create an HTML list item element for adding a new point
+  // Set its text content to "Add point"
+  // Add an event listener to the list item that will handle adding a new point
   const addPointOption = document.createElement('li');
   addPointOption.textContent = 'Add point';
 
+  // Create an HTML list item element for removing all points
+  // Set its text content to "Remove all points"
+  // Add an event listener to the list item that will handle removing all points
   const removeAllPointsOption = document.createElement('li');
   removeAllPointsOption.textContent = 'Remove all points';
 
   // Handle adding a new point
+  // When the add point list item is clicked, create a new popup menu
+  // This menu will allow the user to select a category for the new point
+  // The menu is positioned 20 pixels below the click location
   addPointOption.onclick = () => {
     const categoryPopup = document.createElement('div');
     categoryPopup.style.position = 'absolute';
@@ -178,15 +205,23 @@ map.on('click', function(evt) {
     categoryPopup.style.border = '1px solid black';
     categoryPopup.style.zIndex = 1000;
 
+    // Add a close button to the category popup
+    // The close button is a simple HTML button element that when clicked, removes the category popup from the document
     const closeCategoryButton = document.createElement('button');
     closeCategoryButton.textContent = 'Close';
     closeCategoryButton.onclick = () => document.body.removeChild(categoryPopup);
     categoryPopup.appendChild(closeCategoryButton);
 
+    // Create an HTML unordered list element that will contain the categories
+    // Set its style to have no list style and padding
+    // Add the categories list to the category popup
     const categoryList = document.createElement('ul');
     categoryList.style.listStyle = 'none';
     categoryList.style.padding = 0;
 
+    // Loop through the categories array and create an HTML list item element for each category
+    // Set its text content to the category name
+    // Add an event listener to the list item that will handle adding a new point with the selected category
     const categories = ['Reclamação', 'Elogio', 'Sugestão'];
     categories.forEach((category) => {
       const categoryOption = document.createElement('li');
@@ -202,62 +237,97 @@ map.on('click', function(evt) {
         descriptionPopup.style.border = '1px solid black';
         descriptionPopup.style.zIndex = 1000;
 
+        // Add a close button to the description popup
+        // The close button is a simple HTML button element that when clicked, removes the description popup from the document
         const closeDescriptionButton = document.createElement('button');
         closeDescriptionButton.textContent = 'Close';
         closeDescriptionButton.onclick = () => document.body.removeChild(descriptionPopup);
         descriptionPopup.appendChild(closeDescriptionButton);
 
+        // Create an HTML input element for the description
+        // Set its type to text and add it to the description popup
         const descriptionInput = document.createElement('input');
         descriptionInput.type = 'text';
         descriptionInput.placeholder = `Description for ${category}`;
 
+        // Create an HTML input element for the image
+        // Set its type to file and add it to the description popup
         const imageInput = document.createElement('input');
         imageInput.type = 'file';
         imageInput.accept = 'image/*';
 
+        // Create an HTML button element for confirming the new point
+        // Set its text content to "Confirm"
+        // Add an event listener to the button that will handle adding a new point with the selected category and description
         const confirmButton = document.createElement('button');
         confirmButton.textContent = 'Confirm';
 
+        // Add an event listener to the button that will handle adding a new point with the selected category and description
+        // The event listener will be called when the button is clicked
+        // The event listener will first get the file that was selected by the user
+        // If the user selected a file, the event listener will read the file as a data URL
+        // The event listener will then create a new ol.Feature with the selected category, description, timestamp, and image
+        // The event listener will then add the new feature to the overlay source
+        // The event listener will then remove the description popup from the document
         confirmButton.onclick = () => {
           const file = imageInput.files[0];
           const reader = new FileReader();
           reader.onloadend = () => {
             const clickEvt = new Feature({
+              // The geometry of the feature is the point where the user clicked
+              // The point is in the coordinate system of the map
               geometry: new Point([
                 map.getCoordinateFromPixel(evt.pixel)[0],
                 map.getCoordinateFromPixel(evt.pixel)[1],
               ]),
+              // The name of the feature is the category that the user selected
               name: category,
+              // The description of the feature is the text that the user entered
               description: descriptionInput.value,
+              // The timestamp of the feature is the current time
               timestamp: new Date().toLocaleString(),
+              // The image of the feature is the image that the user selected, or a random image if the user did not select an image
               image: reader.result || `https://picsum.photos/${Math.floor(Math.random() * 200) + 100}`,
             });
+            // Add the new feature to the overlay source
             overlaySource.addFeature(clickEvt);
+            // Remove the description popup from the document
             document.body.removeChild(descriptionPopup);
           };
+          // If the user selected a file, read the file as a data URL
           if (file) {
             reader.readAsDataURL(file);
           } else {
+            // If the user did not select a file, call the onloadend event handler with a null result
             reader.onloadend();
           }
         };
 
+        // Add the description input, image input, and confirm button to the description popup
         descriptionPopup.appendChild(descriptionInput);
         descriptionPopup.appendChild(imageInput);
         descriptionPopup.appendChild(confirmButton);
+        // Add the description popup to the document
         document.body.appendChild(descriptionPopup);
+        // Remove the category popup from the document
         document.body.removeChild(categoryPopup);
       };
 
+      // Add the category option to the categories list
       categoryList.appendChild(categoryOption);
     });
 
+    // Add the categories list to the category popup
     categoryPopup.appendChild(categoryList);
+    // Add the category popup to the document
     document.body.appendChild(categoryPopup);
+    // Remove the popup menu from the document
     document.body.removeChild(popupMenu);
   };
 
   // Handle removing all points
+  // When the remove all points list item is clicked, clear all features from the overlay source
+  // Remove the popup menu from the document
   removeAllPointsOption.onclick = () => {
     overlaySource.clear(); // Clear all features from the overlay source
     document.body.removeChild(popupMenu); // Remove the popup menu
@@ -269,6 +339,57 @@ map.on('click', function(evt) {
   document.body.appendChild(popupMenu);
 });
 
+// Add a 'pointermove' event listener to the map
+map.on('pointermove', function(evt) {
+  const features = map.getFeaturesAtPixel(evt.pixel, {
+    layerFilter: layer => layer === zoneamento, // Filter to use the zoneamento overlay
+  });
 
+  // Create or update the hover text element
+  let hoverText = document.getElementById('hoverText');
+  if (!hoverText) {
+    hoverText = document.createElement('div');
+    hoverText.id = 'hoverText';
+    hoverText.style.position = 'absolute';
+    hoverText.style.zIndex = 1000;
+    hoverText.style.pointerEvents = 'none';
+    hoverText.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+    hoverText.style.padding = '5px';
+    hoverText.style.borderRadius = '5px';
+    document.body.appendChild(hoverText);
+  }
 
+  // If a feature is hovered, display its name
+  if (features.length > 0) {
+    const feature = features[0];
+    hoverText.textContent = feature.get('name') || 'Unnamed';
+    hoverText.style.left = `${evt.pixel[0] + 10}px`;
+    hoverText.style.top = `${evt.pixel[1] + 10}px`;
+    hoverText.style.display = 'block';
+  } else {
+    hoverText.style.display = 'none';
+  }
+});
+
+// Add buttons to toggle the zoneamento and limites overlays
+const buttonContainer = document.createElement('div');
+buttonContainer.style.position = 'absolute';
+buttonContainer.style.bottom = '10px';
+buttonContainer.style.left = '50%';
+buttonContainer.style.transform = 'translateX(-50%)';
+document.body.appendChild(buttonContainer);
+
+const toggleZoneamentoButton = document.createElement('button');
+toggleZoneamentoButton.textContent = 'Toggle zoneamento';
+toggleZoneamentoButton.onclick = () => {
+  zoneamento.setVisible(!zoneamento.getVisible());
+};
+buttonContainer.appendChild(toggleZoneamentoButton);
+
+const toggleLimitesButton = document.createElement('button');
+toggleLimitesButton.textContent = 'Toggle limites';
+toggleLimitesButton.onclick = () => {
+  limites.setVisible(!limites.getVisible());
+};
+buttonContainer.appendChild(toggleLimitesButton);
 
