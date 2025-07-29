@@ -97,38 +97,97 @@ map.addLayer(limites); // Add to the map
 
 // Initialize a source and layer for overlay features (e.g., points of interest)
 var overlaySource = new VectorSource({
-  features: [p1], // Initial features
+  features: [], // Start empty, load from API
 });
 
 const overlay = new VectorLayer({
   source: overlaySource,
   style: function(feature) {
-    labelStyle.getText().setText(feature.get('name')); // Set text for the label style
-    return style; // Return combined styles
+    labelStyle.getText().setText(feature.get('name'));
+    return style;
   },
 });
-map.addLayer(overlay); // Add overlay to the map
+map.addLayer(overlay);
+
+// Helper: Convert API point to ol.Feature
+function apiPointToFeature(apiPoint) {
+  return new Feature({
+    geometry: new Point(apiPoint.coordinates),
+    name: apiPoint.name,
+    description: apiPoint.description,
+    timestamp: apiPoint.timestamp,
+    image: apiPoint.image,
+    id: apiPoint.id,
+  });
+}
+
+// Load points from backend
+async function loadPoints() {
+  const res = await fetch('http://localhost:3000/api/points');
+  const points = await res.json();
+  overlaySource.clear();
+  points.forEach(p => overlaySource.addFeature(apiPointToFeature(p)));
+}
+loadPoints();
+
+// Add new point to backend
+async function addPoint(pointData) {
+  const res = await fetch('http://localhost:3000/api/points', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(pointData),
+  });
+  if (res.ok) loadPoints();
+}
+
+// Remove all points from backend
+async function removeAllPoints() {
+  await fetch('http://localhost:3000/api/points', {method: 'DELETE'});
+  loadPoints();
+}
+
+// Utility to close all popups
+function closeAllPopups() {
+  document.querySelectorAll('.custom-popup').forEach(el => el.remove());
+}
 
 // Handle map clicks to show a popup menu
 map.on('click', function(evt) {
+  closeAllPopups();
+
+  // Only open menu if click is on the map container (not on a popup)
+  if (evt.originalEvent.target.classList.contains('custom-popup') ||
+      evt.originalEvent.target.closest('.custom-popup')) {
+    return;
+  }
+
   // Create a popup menu at the click location
   // The popup menu is an HTML div element that is positioned absolutely at the click location
   // We set its style to have a white background, padding, and a solid black border
   // We also set its z-index to 1000 so it appears on top of the map
   const popupMenu = document.createElement('div');
+  popupMenu.className = 'custom-popup';
   popupMenu.style.position = 'absolute';
   popupMenu.style.left = `${evt.pixel[0]}px`;
   popupMenu.style.top = `${evt.pixel[1]}px`;
   popupMenu.style.backgroundColor = 'white';
-  popupMenu.style.padding = '10px';
-  popupMenu.style.border = '1px solid black';
+  popupMenu.style.padding = '16px';
+  popupMenu.style.border = '1px solid #ddd';
+  popupMenu.style.borderRadius = '12px';
+  popupMenu.style.boxShadow = '0 2px 12px rgba(0,0,0,0.15)';
   popupMenu.style.zIndex = 1000;
+  popupMenu.style.minWidth = '220px';
 
   // Add a close button to the popup
   // The close button is a simple HTML button element that when clicked, removes the popup menu from the document
   const closeButton = document.createElement('button');
   closeButton.textContent = 'Close';
-  closeButton.onclick = () => document.body.removeChild(popupMenu);
+  styleButton(closeButton);
+  closeButton.style.background = '#e81123';
+  closeButton.onmouseover = () => closeButton.style.background = '#b50f1f';
+  closeButton.onmouseout = () => closeButton.style.background = '#e81123';
+  closeButton.style.float = 'right';
+  closeButton.onclick = () => popupMenu.remove();
   popupMenu.appendChild(closeButton);
 
   // Check for features at the clicked location
@@ -139,29 +198,29 @@ map.on('click', function(evt) {
   if (features.length > 0) {
     const point = features[0];
     if (point.getGeometry().getType() === 'Point') {
-      // Display point information if a point feature is clicked
-      // Create an HTML div element that will contain the point information
-      // Set its style to have padding and add it to the popup menu
       const pointInfo = document.createElement('div');
       pointInfo.style.padding = '10px';
+      pointInfo.style.marginBottom = '10px';
 
-      // Create HTML paragraphs for the point's name, description, and timestamp
-      // Set their text content to the point's corresponding properties
-      // Add the paragraphs to the point information div
       const nameParagraph = document.createElement('p');
       nameParagraph.textContent = `Name: ${point.get('name')}`;
+      nameParagraph.style.fontWeight = 'bold';
 
       const descriptionParagraph = document.createElement('p');
       descriptionParagraph.textContent = `Description: ${point.get('description')}`;
 
       const timestampParagraph = document.createElement('p');
       timestampParagraph.textContent = `Timestamp: ${point.get('timestamp')}`;
+      timestampParagraph.style.fontSize = '12px';
+      timestampParagraph.style.color = '#666';
 
-      // Create an HTML image element for the point's image
-      // Set its source to the point's image property
-      // Add the image to the point information div
       const imageElement = document.createElement('img');
       imageElement.src = point.get('image');
+      imageElement.style.maxWidth = '180px';
+      imageElement.style.maxHeight = '120px';
+      imageElement.style.borderRadius = '8px';
+      imageElement.style.border = '1px solid #eee';
+      imageElement.style.marginTop = '8px';
 
       pointInfo.appendChild(nameParagraph);
       pointInfo.appendChild(descriptionParagraph);
@@ -175,21 +234,21 @@ map.on('click', function(evt) {
   // Create an HTML unordered list element that will contain the options
   // Set its style to have no list style and padding
   // Add the options list to the popup menu
-  const optionsList = document.createElement('ul');
-  optionsList.style.listStyle = 'none';
-  optionsList.style.padding = 0;
+  const optionsList = document.createElement('div');
+  optionsList.style.display = 'flex';
+  optionsList.style.justifyContent = 'space-between';
+  optionsList.style.marginTop = '10px';
 
-  // Create an HTML list item element for adding a new point
-  // Set its text content to "Add point"
-  // Add an event listener to the list item that will handle adding a new point
-  const addPointOption = document.createElement('li');
+  const addPointOption = document.createElement('button');
   addPointOption.textContent = 'Add point';
+  styleButton(addPointOption);
 
-  // Create an HTML list item element for removing all points
-  // Set its text content to "Remove all points"
-  // Add an event listener to the list item that will handle removing all points
-  const removeAllPointsOption = document.createElement('li');
+  const removeAllPointsOption = document.createElement('button');
   removeAllPointsOption.textContent = 'Remove all points';
+  styleButton(removeAllPointsOption);
+  removeAllPointsOption.style.background = '#e81123';
+  removeAllPointsOption.onmouseover = () => removeAllPointsOption.style.background = '#b50f1f';
+  removeAllPointsOption.onmouseout = () => removeAllPointsOption.style.background = '#e81123';
 
   // Handle adding a new point
   // When the add point list item is clicked, create a new popup menu
@@ -197,131 +256,112 @@ map.on('click', function(evt) {
   // The menu is positioned 20 pixels below the click location
   addPointOption.onclick = () => {
     const categoryPopup = document.createElement('div');
+    categoryPopup.className = 'custom-popup';
     categoryPopup.style.position = 'absolute';
     categoryPopup.style.left = `${evt.pixel[0]}px`;
     categoryPopup.style.top = `${evt.pixel[1] + 20}px`;
     categoryPopup.style.backgroundColor = 'white';
-    categoryPopup.style.padding = '10px';
-    categoryPopup.style.border = '1px solid black';
+    categoryPopup.style.padding = '16px';
+    categoryPopup.style.border = '1px solid #ddd';
+    categoryPopup.style.borderRadius = '12px';
+    categoryPopup.style.boxShadow = '0 2px 12px rgba(0,0,0,0.15)';
     categoryPopup.style.zIndex = 1000;
+    categoryPopup.style.minWidth = '220px';
 
-    // Add a close button to the category popup
-    // The close button is a simple HTML button element that when clicked, removes the category popup from the document
     const closeCategoryButton = document.createElement('button');
     closeCategoryButton.textContent = 'Close';
-    closeCategoryButton.onclick = () => document.body.removeChild(categoryPopup);
+    styleButton(closeCategoryButton);
+    closeCategoryButton.style.background = '#e81123';
+    closeCategoryButton.onmouseover = () => closeCategoryButton.style.background = '#b50f1f';
+    closeCategoryButton.onmouseout = () => closeCategoryButton.style.background = '#e81123';
+    closeCategoryButton.style.float = 'right';
+    closeCategoryButton.onclick = () => categoryPopup.remove();
     categoryPopup.appendChild(closeCategoryButton);
 
-    // Create an HTML unordered list element that will contain the categories
-    // Set its style to have no list style and padding
-    // Add the categories list to the category popup
-    const categoryList = document.createElement('ul');
-    categoryList.style.listStyle = 'none';
-    categoryList.style.padding = 0;
+    const categoryList = document.createElement('div');
+    categoryList.style.display = 'flex';
+    categoryList.style.justifyContent = 'space-between';
+    categoryList.style.marginTop = '10px';
 
-    // Loop through the categories array and create an HTML list item element for each category
-    // Set its text content to the category name
-    // Add an event listener to the list item that will handle adding a new point with the selected category
     const categories = ['Reclamação', 'Elogio', 'Sugestão'];
     categories.forEach((category) => {
-      const categoryOption = document.createElement('li');
+      const categoryOption = document.createElement('button');
       categoryOption.textContent = category;
-
+      styleButton(categoryOption);
       categoryOption.onclick = () => {
         const descriptionPopup = document.createElement('div');
+        descriptionPopup.className = 'custom-popup';
         descriptionPopup.style.position = 'absolute';
         descriptionPopup.style.left = `${evt.pixel[0]}px`;
         descriptionPopup.style.top = `${evt.pixel[1] + 40}px`;
         descriptionPopup.style.backgroundColor = 'white';
-        descriptionPopup.style.padding = '10px';
-        descriptionPopup.style.border = '1px solid black';
+        descriptionPopup.style.padding = '16px';
+        descriptionPopup.style.border = '1px solid #ddd';
+        descriptionPopup.style.borderRadius = '12px';
+        descriptionPopup.style.boxShadow = '0 2px 12px rgba(0,0,0,0.15)';
         descriptionPopup.style.zIndex = 1000;
+        descriptionPopup.style.minWidth = '220px';
 
-        // Add a close button to the description popup
-        // The close button is a simple HTML button element that when clicked, removes the description popup from the document
         const closeDescriptionButton = document.createElement('button');
         closeDescriptionButton.textContent = 'Close';
-        closeDescriptionButton.onclick = () => document.body.removeChild(descriptionPopup);
+        styleButton(closeDescriptionButton);
+        closeDescriptionButton.style.background = '#e81123';
+        closeDescriptionButton.onmouseover = () => closeDescriptionButton.style.background = '#b50f1f';
+        closeDescriptionButton.onmouseout = () => closeDescriptionButton.style.background = '#e81123';
+        closeDescriptionButton.style.float = 'right';
+        closeDescriptionButton.onclick = () => descriptionPopup.remove();
         descriptionPopup.appendChild(closeDescriptionButton);
 
-        // Create an HTML input element for the description
-        // Set its type to text and add it to the description popup
         const descriptionInput = document.createElement('input');
         descriptionInput.type = 'text';
         descriptionInput.placeholder = `Description for ${category}`;
+        descriptionInput.style.padding = '8px';
+        descriptionInput.style.margin = '8px 0';
+        descriptionInput.style.borderRadius = '6px';
+        descriptionInput.style.border = '1px solid #ccc';
+        descriptionInput.style.width = '95%';
 
-        // Create an HTML input element for the image
-        // Set its type to file and add it to the description popup
         const imageInput = document.createElement('input');
         imageInput.type = 'file';
         imageInput.accept = 'image/*';
+        imageInput.style.margin = '8px 0';
 
-        // Create an HTML button element for confirming the new point
-        // Set its text content to "Confirm"
-        // Add an event listener to the button that will handle adding a new point with the selected category and description
         const confirmButton = document.createElement('button');
         confirmButton.textContent = 'Confirm';
+        styleButton(confirmButton);
 
-        // Add an event listener to the button that will handle adding a new point with the selected category and description
-        // The event listener will be called when the button is clicked
-        // The event listener will first get the file that was selected by the user
-        // If the user selected a file, the event listener will read the file as a data URL
-        // The event listener will then create a new ol.Feature with the selected category, description, timestamp, and image
-        // The event listener will then add the new feature to the overlay source
-        // The event listener will then remove the description popup from the document
         confirmButton.onclick = () => {
           const file = imageInput.files[0];
           const reader = new FileReader();
           reader.onloadend = () => {
-            const clickEvt = new Feature({
-              // The geometry of the feature is the point where the user clicked
-              // The point is in the coordinate system of the map
-              geometry: new Point([
-                map.getCoordinateFromPixel(evt.pixel)[0],
-                map.getCoordinateFromPixel(evt.pixel)[1],
-              ]),
-              // The name of the feature is the category that the user selected
+            const pointData = {
+              coordinates: map.getCoordinateFromPixel(evt.pixel),
               name: category,
-              // The description of the feature is the text that the user entered
               description: descriptionInput.value,
-              // The timestamp of the feature is the current time
               timestamp: new Date().toLocaleString(),
-              // The image of the feature is the image that the user selected, or a random image if the user did not select an image
               image: reader.result || `https://picsum.photos/${Math.floor(Math.random() * 200) + 100}`,
-            });
-            // Add the new feature to the overlay source
-            overlaySource.addFeature(clickEvt);
-            // Remove the description popup from the document
+            };
+            addPoint(pointData);
             document.body.removeChild(descriptionPopup);
           };
-          // If the user selected a file, read the file as a data URL
           if (file) {
             reader.readAsDataURL(file);
           } else {
-            // If the user did not select a file, call the onloadend event handler with a null result
             reader.onloadend();
           }
         };
 
-        // Add the description input, image input, and confirm button to the description popup
         descriptionPopup.appendChild(descriptionInput);
         descriptionPopup.appendChild(imageInput);
         descriptionPopup.appendChild(confirmButton);
-        // Add the description popup to the document
         document.body.appendChild(descriptionPopup);
-        // Remove the category popup from the document
         document.body.removeChild(categoryPopup);
       };
-
-      // Add the category option to the categories list
       categoryList.appendChild(categoryOption);
     });
 
-    // Add the categories list to the category popup
     categoryPopup.appendChild(categoryList);
-    // Add the category popup to the document
     document.body.appendChild(categoryPopup);
-    // Remove the popup menu from the document
     document.body.removeChild(popupMenu);
   };
 
@@ -329,8 +369,8 @@ map.on('click', function(evt) {
   // When the remove all points list item is clicked, clear all features from the overlay source
   // Remove the popup menu from the document
   removeAllPointsOption.onclick = () => {
-    overlaySource.clear(); // Clear all features from the overlay source
-    document.body.removeChild(popupMenu); // Remove the popup menu
+    removeAllPoints();
+    document.body.removeChild(popupMenu);
   };
 
   optionsList.appendChild(addPointOption);
@@ -339,13 +379,35 @@ map.on('click', function(evt) {
   document.body.appendChild(popupMenu);
 });
 
+// Global click handler to close popups when clicking outside
+document.addEventListener('mousedown', function(e) {
+  // If click is outside any .custom-popup, close all popups
+  if (!e.target.classList.contains('custom-popup') &&
+      !e.target.closest('.custom-popup')) {
+    closeAllPopups();
+  }
+});
+
+// Helper function for button styling
+function styleButton(btn) {
+  btn.style.padding = '8px 16px';
+  btn.style.margin = '5px';
+  btn.style.border = 'none';
+  btn.style.borderRadius = '6px';
+  btn.style.background = '#0078d7';
+  btn.style.color = '#fff';
+  btn.style.cursor = 'pointer';
+  btn.style.fontWeight = 'bold';
+  btn.onmouseover = () => btn.style.background = '#005fa3';
+  btn.onmouseout = () => btn.style.background = '#0078d7';
+}
+
 // Add a 'pointermove' event listener to the map
 map.on('pointermove', function(evt) {
   const features = map.getFeaturesAtPixel(evt.pixel, {
-    layerFilter: layer => layer === zoneamento, // Filter to use the zoneamento overlay
+    layerFilter: layer => layer === zoneamento,
   });
 
-  // Create or update the hover text element
   let hoverText = document.getElementById('hoverText');
   if (!hoverText) {
     hoverText = document.createElement('div');
@@ -354,12 +416,14 @@ map.on('pointermove', function(evt) {
     hoverText.style.zIndex = 1000;
     hoverText.style.pointerEvents = 'none';
     hoverText.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
-    hoverText.style.padding = '5px';
-    hoverText.style.borderRadius = '5px';
+    hoverText.style.padding = '5px 12px';
+    hoverText.style.borderRadius = '8px';
+    hoverText.style.boxShadow = '0 2px 8px rgba(0,0,0,0.10)';
+    hoverText.style.fontWeight = 'bold';
+    hoverText.style.fontFamily = 'Segoe UI, Arial, sans-serif';
     document.body.appendChild(hoverText);
   }
 
-  // If a feature is hovered, display its name
   if (features.length > 0) {
     const feature = features[0];
     hoverText.textContent = feature.get('name') || 'Unnamed';
@@ -377,10 +441,16 @@ buttonContainer.style.position = 'absolute';
 buttonContainer.style.bottom = '10px';
 buttonContainer.style.left = '50%';
 buttonContainer.style.transform = 'translateX(-50%)';
+buttonContainer.style.display = 'flex';
+buttonContainer.style.gap = '10px';
 document.body.appendChild(buttonContainer);
 
 const toggleZoneamentoButton = document.createElement('button');
 toggleZoneamentoButton.textContent = 'Toggle zoneamento';
+styleButton(toggleZoneamentoButton);
+toggleZoneamentoButton.style.background = '#107c10';
+toggleZoneamentoButton.onmouseover = () => toggleZoneamentoButton.style.background = '#0b5c0b';
+toggleZoneamentoButton.onmouseout = () => toggleZoneamentoButton.style.background = '#107c10';
 toggleZoneamentoButton.onclick = () => {
   zoneamento.setVisible(!zoneamento.getVisible());
 };
@@ -388,6 +458,10 @@ buttonContainer.appendChild(toggleZoneamentoButton);
 
 const toggleLimitesButton = document.createElement('button');
 toggleLimitesButton.textContent = 'Toggle limites';
+styleButton(toggleLimitesButton);
+toggleLimitesButton.style.background = '#2d7d9a';
+toggleLimitesButton.onmouseover = () => toggleLimitesButton.style.background = '#20586c';
+toggleLimitesButton.onmouseout = () => toggleLimitesButton.style.background = '#2d7d9a';
 toggleLimitesButton.onclick = () => {
   limites.setVisible(!limites.getVisible());
 };
