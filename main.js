@@ -1,18 +1,18 @@
 // Import necessary modules from OpenLayers for map creation and interactions
-import Map from 'https://cdn.jsdelivr.net/npm/ol@v7.0.0/dist/ol.js';
-import View from 'https://cdn.jsdelivr.net/npm/ol@v7.0.0/dist/ol.js';
-import OSM from 'https://cdn.jsdelivr.net/npm/ol@v7.0.0/dist/ol.js';
-import TileLayer from 'https://cdn.jsdelivr.net/npm/ol@v7.0.0/dist/ol.js';
-import VectorLayer from 'https://cdn.jsdelivr.net/npm/ol@v7.0.0/dist/ol.js';
-import VectorSource from 'https://cdn.jsdelivr.net/npm/ol@v7.0.0/dist/ol.js';
-import GeoJSON from 'https://cdn.jsdelivr.net/npm/ol@v7.0.0/dist/ol.js';
-import Link from 'https://cdn.jsdelivr.net/npm/ol@v7.0.0/dist/ol.js';
-import {Style, Fill, Stroke, Icon, Text} from 'https://cdn.jsdelivr.net/npm/ol@v7.0.0/dist/ol.js';
-import {fromLonLat} from 'https://cdn.jsdelivr.net/npm/ol@v7.0.0/dist/ol.js';
-import Draw from 'https://cdn.jsdelivr.net/npm/ol@v7.0.0/dist/ol.js';
-import KML from 'https://cdn.jsdelivr.net/npm/ol@v7.0.0/dist/ol.js';
-import {Feature} from 'https://cdn.jsdelivr.net/npm/ol@v7.0.0/dist/ol.js';
-import {Point} from 'https://cdn.jsdelivr.net/npm/ol@v7.0.0/dist/ol.js';
+import Map from 'ol/Map.js';
+import View from 'ol/View.js';
+import OSM from 'ol/source/OSM.js';
+import TileLayer from 'ol/layer/Tile.js';
+import VectorLayer from 'ol/layer/Vector.js';
+import VectorSource from 'ol/source/Vector.js';
+import GeoJSON from 'ol/format/GeoJSON.js';
+import Link from 'ol/interaction/Link';
+import {Style, Fill, Stroke, Icon, Text} from 'ol/style';
+import {fromLonLat} from 'ol/proj.js';
+import Draw from 'ol/interaction/Draw';
+import KML from 'ol/format/KML.js';
+import {Feature} from 'ol';
+import {Point} from 'ol/geom';
 
 // Create a point feature for a specific location
 const p1 = new Feature({
@@ -392,5 +392,4 @@ toggleLimitesButton.onclick = () => {
   limites.setVisible(!limites.getVisible());
 };
 buttonContainer.appendChild(toggleLimitesButton);
-
 
