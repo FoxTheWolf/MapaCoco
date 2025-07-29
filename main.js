@@ -118,12 +118,23 @@ function apiPointToFeature(apiPoint) {
     timestamp: apiPoint.timestamp,
     image: apiPoint.image,
     id: apiPoint.id,
+    user: apiPoint.user,
   });
 }
 
 // Load points from backend
 async function loadPoints() {
-  const res = await fetch('http://localhost:3000/api/points');
+  if (!jwtToken) {
+    jwtToken = localStorage.getItem('jwtToken');
+    currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+    if (!jwtToken || !currentUser) {
+      showLoginForm();
+      return;
+    }
+  }
+  const res = await fetch('http://localhost:3000/api/points', {
+    headers: {Authorization: `Bearer ${jwtToken}`},
+  });
   const points = await res.json();
   overlaySource.clear();
   points.forEach(p => overlaySource.addFeature(apiPointToFeature(p)));
@@ -132,9 +143,14 @@ loadPoints();
 
 // Add new point to backend
 async function addPoint(pointData) {
+  if (!jwtToken) return showLoginForm();
+  pointData.user = currentUser.username;
   const res = await fetch('http://localhost:3000/api/points', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${jwtToken}`,
+    },
     body: JSON.stringify(pointData),
   });
   if (res.ok) loadPoints();
@@ -142,7 +158,11 @@ async function addPoint(pointData) {
 
 // Remove all points from backend
 async function removeAllPoints() {
-  await fetch('http://localhost:3000/api/points', {method: 'DELETE'});
+  if (!jwtToken) return showLoginForm();
+  await fetch('http://localhost:3000/api/points', {
+    method: 'DELETE',
+    headers: {Authorization: `Bearer ${jwtToken}`},
+  });
   loadPoints();
 }
 
@@ -155,16 +175,13 @@ function closeAllPopups() {
 map.on('click', function(evt) {
   closeAllPopups();
 
-  // Only open menu if click is on the map container (not on a popup)
   if (evt.originalEvent.target.classList.contains('custom-popup') ||
       evt.originalEvent.target.closest('.custom-popup')) {
     return;
   }
 
-  // Create a popup menu at the click location
-  // The popup menu is an HTML div element that is positioned absolutely at the click location
-  // We set its style to have a white background, padding, and a solid black border
-  // We also set its z-index to 1000 so it appears on top of the map
+  const clickPixel = evt.pixel; // Capture pixel coordinates
+
   const popupMenu = document.createElement('div');
   popupMenu.className = 'custom-popup';
   popupMenu.style.position = 'absolute';
@@ -178,8 +195,6 @@ map.on('click', function(evt) {
   popupMenu.style.zIndex = 1000;
   popupMenu.style.minWidth = '220px';
 
-  // Add a close button to the popup
-  // The close button is a simple HTML button element that when clicked, removes the popup menu from the document
   const closeButton = document.createElement('button');
   closeButton.textContent = 'Close';
   styleButton(closeButton);
@@ -190,10 +205,6 @@ map.on('click', function(evt) {
   closeButton.onclick = () => popupMenu.remove();
   popupMenu.appendChild(closeButton);
 
-  // Check for features at the clicked location
-  // Get the features at the pixel location of the click event
-  // If there are any features, loop through them and check if the first feature is a point
-  // If it is, display point information in the popup
   const features = map.getFeaturesAtPixel(evt.pixel);
   if (features.length > 0) {
     const point = features[0];
@@ -214,6 +225,15 @@ map.on('click', function(evt) {
       timestampParagraph.style.fontSize = '12px';
       timestampParagraph.style.color = '#666';
 
+      // Only show user info if current user is admin
+      if (currentUser && currentUser.is_admin) {
+        const userParagraph = document.createElement('p');
+        userParagraph.textContent = `Created by: ${point.get('user') || 'unknown'}`;
+        userParagraph.style.fontSize = '12px';
+        userParagraph.style.color = '#888';
+        pointInfo.appendChild(userParagraph);
+      }
+
       const imageElement = document.createElement('img');
       imageElement.src = point.get('image');
       imageElement.style.maxWidth = '180px';
@@ -230,10 +250,6 @@ map.on('click', function(evt) {
     }
   }
 
-  // Create options for adding or removing points
-  // Create an HTML unordered list element that will contain the options
-  // Set its style to have no list style and padding
-  // Add the options list to the popup menu
   const optionsList = document.createElement('div');
   optionsList.style.display = 'flex';
   optionsList.style.justifyContent = 'space-between';
@@ -250,124 +266,128 @@ map.on('click', function(evt) {
   removeAllPointsOption.onmouseover = () => removeAllPointsOption.style.background = '#b50f1f';
   removeAllPointsOption.onmouseout = () => removeAllPointsOption.style.background = '#e81123';
 
-  // Handle adding a new point
-  // When the add point list item is clicked, create a new popup menu
-  // This menu will allow the user to select a category for the new point
-  // The menu is positioned 20 pixels below the click location
   addPointOption.onclick = () => {
-    const categoryPopup = document.createElement('div');
-    categoryPopup.className = 'custom-popup';
-    categoryPopup.style.position = 'absolute';
-    categoryPopup.style.left = `${evt.pixel[0]}px`;
-    categoryPopup.style.top = `${evt.pixel[1] + 20}px`;
-    categoryPopup.style.backgroundColor = 'white';
-    categoryPopup.style.padding = '16px';
-    categoryPopup.style.border = '1px solid #ddd';
-    categoryPopup.style.borderRadius = '12px';
-    categoryPopup.style.boxShadow = '0 2px 12px rgba(0,0,0,0.15)';
-    categoryPopup.style.zIndex = 1000;
-    categoryPopup.style.minWidth = '220px';
+    function showCategoryPopup() {
+      const categoryPopup = document.createElement('div');
+      categoryPopup.className = 'custom-popup';
+      categoryPopup.style.position = 'absolute';
+      categoryPopup.style.left = `${clickPixel[0]}px`;
+      categoryPopup.style.top = `${clickPixel[1] + 20}px`;
+      categoryPopup.style.backgroundColor = 'white';
+      categoryPopup.style.padding = '16px';
+      categoryPopup.style.border = '1px solid #ddd';
+      categoryPopup.style.borderRadius = '12px';
+      categoryPopup.style.boxShadow = '0 2px 12px rgba(0,0,0,0.15)';
+      categoryPopup.style.zIndex = 1000;
+      categoryPopup.style.minWidth = '220px';
 
-    const closeCategoryButton = document.createElement('button');
-    closeCategoryButton.textContent = 'Close';
-    styleButton(closeCategoryButton);
-    closeCategoryButton.style.background = '#e81123';
-    closeCategoryButton.onmouseover = () => closeCategoryButton.style.background = '#b50f1f';
-    closeCategoryButton.onmouseout = () => closeCategoryButton.style.background = '#e81123';
-    closeCategoryButton.style.float = 'right';
-    closeCategoryButton.onclick = () => categoryPopup.remove();
-    categoryPopup.appendChild(closeCategoryButton);
+      const closeCategoryButton = document.createElement('button');
+      closeCategoryButton.textContent = 'Close';
+      styleButton(closeCategoryButton);
+      closeCategoryButton.style.background = '#e81123';
+      closeCategoryButton.onmouseover = () => closeCategoryButton.style.background = '#b50f1f';
+      closeCategoryButton.onmouseout = () => closeCategoryButton.style.background = '#e81123';
+      closeCategoryButton.style.float = 'right';
+      closeCategoryButton.onclick = () => categoryPopup.remove();
+      categoryPopup.appendChild(closeCategoryButton);
 
-    const categoryList = document.createElement('div');
-    categoryList.style.display = 'flex';
-    categoryList.style.justifyContent = 'space-between';
-    categoryList.style.marginTop = '10px';
+      const categoryList = document.createElement('div');
+      categoryList.style.display = 'flex';
+      categoryList.style.justifyContent = 'space-between';
+      categoryList.style.marginTop = '10px';
 
-    const categories = ['Reclamação', 'Elogio', 'Sugestão'];
-    categories.forEach((category) => {
-      const categoryOption = document.createElement('button');
-      categoryOption.textContent = category;
-      styleButton(categoryOption);
-      categoryOption.onclick = () => {
-        const descriptionPopup = document.createElement('div');
-        descriptionPopup.className = 'custom-popup';
-        descriptionPopup.style.position = 'absolute';
-        descriptionPopup.style.left = `${evt.pixel[0]}px`;
-        descriptionPopup.style.top = `${evt.pixel[1] + 40}px`;
-        descriptionPopup.style.backgroundColor = 'white';
-        descriptionPopup.style.padding = '16px';
-        descriptionPopup.style.border = '1px solid #ddd';
-        descriptionPopup.style.borderRadius = '12px';
-        descriptionPopup.style.boxShadow = '0 2px 12px rgba(0,0,0,0.15)';
-        descriptionPopup.style.zIndex = 1000;
-        descriptionPopup.style.minWidth = '220px';
+      const categories = ['Reclamação', 'Elogio', 'Sugestão'];
+      categories.forEach((category) => {
+        const categoryOption = document.createElement('button');
+        categoryOption.textContent = category;
+        styleButton(categoryOption);
+        categoryOption.onclick = () => {
+          // Close category popup before showing description popup
+          categoryPopup.remove();
 
-        const closeDescriptionButton = document.createElement('button');
-        closeDescriptionButton.textContent = 'Close';
-        styleButton(closeDescriptionButton);
-        closeDescriptionButton.style.background = '#e81123';
-        closeDescriptionButton.onmouseover = () => closeDescriptionButton.style.background = '#b50f1f';
-        closeDescriptionButton.onmouseout = () => closeDescriptionButton.style.background = '#e81123';
-        closeDescriptionButton.style.float = 'right';
-        closeDescriptionButton.onclick = () => descriptionPopup.remove();
-        descriptionPopup.appendChild(closeDescriptionButton);
+          const descriptionPopup = document.createElement('div');
+          descriptionPopup.className = 'custom-popup';
+          descriptionPopup.style.position = 'absolute';
+          descriptionPopup.style.left = `${clickPixel[0]}px`;
+          descriptionPopup.style.top = `${clickPixel[1] + 40}px`;
+          descriptionPopup.style.backgroundColor = 'white';
+          descriptionPopup.style.padding = '16px';
+          descriptionPopup.style.border = '1px solid #ddd';
+          descriptionPopup.style.borderRadius = '12px';
+          descriptionPopup.style.boxShadow = '0 2px 12px rgba(0,0,0,0.15)';
+          descriptionPopup.style.zIndex = 1000;
+          descriptionPopup.style.minWidth = '220px';
 
-        const descriptionInput = document.createElement('input');
-        descriptionInput.type = 'text';
-        descriptionInput.placeholder = `Description for ${category}`;
-        descriptionInput.style.padding = '8px';
-        descriptionInput.style.margin = '8px 0';
-        descriptionInput.style.borderRadius = '6px';
-        descriptionInput.style.border = '1px solid #ccc';
-        descriptionInput.style.width = '95%';
+          const closeDescriptionButton = document.createElement('button');
+          closeDescriptionButton.textContent = 'Close';
+          styleButton(closeDescriptionButton);
+          closeDescriptionButton.style.background = '#e81123';
+          closeDescriptionButton.onmouseover = () => closeDescriptionButton.style.background = '#b50f1f';
+          closeDescriptionButton.onmouseout = () => closeDescriptionButton.style.background = '#e81123';
+          closeDescriptionButton.style.float = 'right';
+          closeDescriptionButton.onclick = () => descriptionPopup.remove();
+          descriptionPopup.appendChild(closeDescriptionButton);
 
-        const imageInput = document.createElement('input');
-        imageInput.type = 'file';
-        imageInput.accept = 'image/*';
-        imageInput.style.margin = '8px 0';
+          const descriptionInput = document.createElement('input');
+          descriptionInput.type = 'text';
+          descriptionInput.placeholder = `Description for ${category}`;
+          descriptionInput.style.padding = '8px';
+          descriptionInput.style.margin = '8px 0';
+          descriptionInput.style.borderRadius = '6px';
+          descriptionInput.style.border = '1px solid #ccc';
+          descriptionInput.style.width = '95%';
 
-        const confirmButton = document.createElement('button');
-        confirmButton.textContent = 'Confirm';
-        styleButton(confirmButton);
+          const imageInput = document.createElement('input');
+          imageInput.type = 'file';
+          imageInput.accept = 'image/*';
+          imageInput.style.margin = '8px 0';
 
-        confirmButton.onclick = () => {
-          const file = imageInput.files[0];
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const pointData = {
-              coordinates: map.getCoordinateFromPixel(evt.pixel),
-              name: category,
-              description: descriptionInput.value,
-              timestamp: new Date().toLocaleString(),
-              image: reader.result || `https://picsum.photos/${Math.floor(Math.random() * 200) + 100}`,
+          const confirmButton = document.createElement('button');
+          confirmButton.textContent = 'Confirm';
+          styleButton(confirmButton);
+
+          confirmButton.onclick = () => {
+            const file = imageInput.files[0];
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const pointData = {
+                coordinates: map.getCoordinateFromPixel(clickPixel),
+                name: category,
+                description: descriptionInput.value,
+                timestamp: new Date().toLocaleString(),
+                image: reader.result || `https://picsum.photos/${Math.floor(Math.random() * 200) + 100}`,
+              };
+              addPoint(pointData);
+              // Only close the description popup after the point is created
+              document.body.removeChild(descriptionPopup);
             };
-            addPoint(pointData);
-            document.body.removeChild(descriptionPopup);
+            if (file) {
+              reader.readAsDataURL(file);
+            } else {
+              reader.onloadend();
+            }
           };
-          if (file) {
-            reader.readAsDataURL(file);
-          } else {
-            reader.onloadend();
-          }
+
+          descriptionPopup.appendChild(descriptionInput);
+          descriptionPopup.appendChild(imageInput);
+          descriptionPopup.appendChild(confirmButton);
+          document.body.appendChild(descriptionPopup);
         };
+        categoryList.appendChild(categoryOption);
+      });
 
-        descriptionPopup.appendChild(descriptionInput);
-        descriptionPopup.appendChild(imageInput);
-        descriptionPopup.appendChild(confirmButton);
-        document.body.appendChild(descriptionPopup);
-        document.body.removeChild(categoryPopup);
-      };
-      categoryList.appendChild(categoryOption);
-    });
+      categoryPopup.appendChild(categoryList);
+      document.body.appendChild(categoryPopup);
+      document.body.removeChild(popupMenu);
+    }
 
-    categoryPopup.appendChild(categoryList);
-    document.body.appendChild(categoryPopup);
-    document.body.removeChild(popupMenu);
+    if (!jwtToken || !currentUser) {
+      showLoginForm(showCategoryPopup);
+      return;
+    }
+    showCategoryPopup();
   };
 
-  // Handle removing all points
-  // When the remove all points list item is clicked, clear all features from the overlay source
-  // Remove the popup menu from the document
   removeAllPointsOption.onclick = () => {
     removeAllPoints();
     document.body.removeChild(popupMenu);
@@ -381,7 +401,6 @@ map.on('click', function(evt) {
 
 // Global click handler to close popups when clicking outside
 document.addEventListener('mousedown', function(e) {
-  // If click is outside any .custom-popup, close all popups
   if (!e.target.classList.contains('custom-popup') &&
       !e.target.closest('.custom-popup')) {
     closeAllPopups();
@@ -466,4 +485,89 @@ toggleLimitesButton.onclick = () => {
   limites.setVisible(!limites.getVisible());
 };
 buttonContainer.appendChild(toggleLimitesButton);
+
+// Add login button
+const loginButton = document.createElement('button');
+loginButton.textContent = 'Login';
+styleButton(loginButton);
+loginButton.style.background = '#444';
+loginButton.onmouseover = () => loginButton.style.background = '#222';
+loginButton.onmouseout = () => loginButton.style.background = '#444';
+loginButton.onclick = () => showLoginForm();
+buttonContainer.appendChild(loginButton);
+
+// Login and user management
+let currentUser = null;
+let jwtToken = null;
+
+// Show login form if not logged in
+function showLoginForm(onSuccess) {
+  closeAllPopups();
+  const loginPopup = document.createElement('div');
+  loginPopup.className = 'custom-popup';
+  loginPopup.style.position = 'fixed';
+  loginPopup.style.left = '50%';
+  loginPopup.style.top = '50%';
+  loginPopup.style.transform = 'translate(-50%, -50%)';
+  loginPopup.style.backgroundColor = 'white';
+  loginPopup.style.padding = '24px';
+  loginPopup.style.border = '1px solid #ddd';
+  loginPopup.style.borderRadius = '12px';
+  loginPopup.style.boxShadow = '0 2px 12px rgba(0,0,0,0.15)';
+  loginPopup.style.zIndex = 2000;
+  loginPopup.style.minWidth = '260px';
+
+  const title = document.createElement('h3');
+  title.textContent = 'Login';
+  loginPopup.appendChild(title);
+
+  const userInput = document.createElement('input');
+  userInput.type = 'text';
+  userInput.placeholder = 'Username';
+  userInput.style.display = 'block';
+  userInput.style.margin = '10px 0';
+  userInput.style.width = '100%';
+
+  const passInput = document.createElement('input');
+  passInput.type = 'password';
+  passInput.placeholder = 'Password';
+  passInput.style.display = 'block';
+  passInput.style.margin = '10px 0';
+  passInput.style.width = '100%';
+
+  const loginBtn = document.createElement('button');
+  loginBtn.textContent = 'Login';
+  styleButton(loginBtn);
+
+  loginBtn.onclick = async () => {
+    const res = await fetch('http://localhost:3000/api/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: userInput.value, password: passInput.value}),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      jwtToken = data.token;
+      currentUser = data.user;
+      localStorage.setItem('jwtToken', jwtToken);
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+      loginPopup.remove();
+      if (typeof onSuccess === 'function') onSuccess();
+      loadPoints();
+    } else {
+      alert('Login failed');
+    }
+  };
+
+  loginPopup.appendChild(userInput);
+  loginPopup.appendChild(passInput);
+  loginPopup.appendChild(loginBtn);
+  document.body.appendChild(loginPopup);
+}
+
+//# sourceMappingURL=main.js.map}  document.body.appendChild(loginPopup);  loginPopup.appendChild(loginBtn);  loginPopup.appendChild(passInput);  loginPopup.appendChild(userInput);  loginPopup.appendChild(passInput);
+  loginPopup.appendChild(loginBtn);
+  document.body.appendChild(loginPopup);
+
+
 
